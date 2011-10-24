@@ -1,6 +1,6 @@
 Package: reportr
-Version: 0.2.0
-Date: 2011-07-28
+Version: 1.0.0
+Date: 2011-10-24
 Title: A general message and error reporting system
 Author: Jon Clayden <jon.clayden+reportr@gmail.com>
 Maintainer: Jon Clayden <jon.clayden+reportr@gmail.com>
@@ -13,6 +13,6 @@ Description: The reportr package provides a system for reporting
         current "output level".
 LazyLoad: yes
 License: GPL-2
-Packaged: 2011-07-28 10:12:57 UTC; jon
+Packaged: 2011-10-24 16:25:13 UTC; jon
 Repository: CRAN
-Date/Publication: 2011-07-28 13:13:47
+Date/Publication: 2011-10-25 07:48:10
