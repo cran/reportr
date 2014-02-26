@@ -1,10 +1,10 @@
-3fc3c57b881ffaec0dee3cd6226a1890 *DESCRIPTION
+10edf38bac68dd91a9014ca7d6e0731c *DESCRIPTION
 012592abf4b40a8d741b299df2ded05a *NAMESPACE
-ad32d76275ecab4679ae6bdd30cb0980 *NEWS
+7370c29ff74f0865cc9103bf5292098b *NEWS
 3a74016845424357fa3f1cd2f51b526f *R/00_constants.R
 9b93c07abc7df9b69b3f73d3d5cfc95e *R/infix.R
-01c8dc41dc8d3cff8166fc710727c10c *R/reportr.R
-fe4e4f75b16140c95ea55c5af9ab93dc *R/substitute.R
+5225c5c2833a3f5ac0e73a7db492cffd *R/reportr.R
+0a26a40d42b81b1528a3c1d45e332204 *R/substitute.R
 19680e33e0aedf2d0f65c290e11192f3 *man/infix.Rd
 4a09a01535f04514c7025622c556f4c6 *man/reportr.Rd
-ac57580ebf1da362e9d3bccd7360f59b *man/substitute.Rd
+b3f687ba96ebe28174fdcc1ec22a722e *man/substitute.Rd

@@ -1,5 +1,11 @@
+.evaluateLevel <- function (level)
+{
+    return (eval(substitute(level,parent.frame()), OL))
+}
+
 setOutputLevel <- function (level)
 {
+    level <- .evaluateLevel(level)
     if (level %in% OL$Debug:OL$Error)
         options(reportrOutputLevel=level)
     invisible(NULL)
@@ -127,6 +133,7 @@ ask <- function (..., default = NULL, prefixFormat = NULL)
 
 report <- function (level, ..., prefixFormat = NULL)
 {
+    level <- .evaluateLevel(level)
     outputLevel <- getOutputLevel()
     message <- .buildMessage(...)
     if (outputLevel > level || is.null(message))
@@ -160,6 +167,7 @@ report <- function (level, ..., prefixFormat = NULL)
 
 flag <- function (level, ...)
 {
+    level <- .evaluateLevel(level)
     if (getOutputLevel() == OL$Debug)
     {
         stackTraceLevel <- getOption("reportrStackTraceLevel")
