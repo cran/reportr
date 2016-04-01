@@ -2,7 +2,17 @@
 
 The `reportr` package for R is a simple alternative to R's standard functions for producing informative output, such as `message()`, `warning()` and `stop()`. It offers a certain amount more flexibility than these functions, although it is not (yet) a full logging solution. The package is available on CRAN.
 
-Further alternatives in this area include the [`futile.logger`](https://cran.r-project.org/web/packages/futile.logger/), [`log4r`](https://cran.r-project.org/web/packages/log4r/index.html) and [`logging`](https://cran.r-project.org/web/packages/logging/) packages.
+Further alternatives in this area include the [`futile.logger`](https://cran.r-project.org/package=futile.logger), [`log4r`](https://cran.r-project.org/package=log4r) and [`logging`](https://cran.r-project.org/package=logging) packages.
+
+## Contents
+
+- [Usage](#usage)
+- [Using `reportr` to handle standard messages](#using-reportr-to-handle-standard-messages)
+- [Output consolidation](#output-consolidation)
+- [Expression substitution](#expression-substitution)
+- [Message filtering](#message-filtering)
+- [Stack tracing](#stack-tracing)
+- [The `Question` reporting level](#the-question-reporting-level)
 
 ## Usage
 
