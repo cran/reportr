@@ -1,9 +1,11 @@
-75b0c4eee93cadad5e7ef6df88282a33 *DESCRIPTION
-8b2772866194948f54f5e17108508f92 *NAMESPACE
-8aed617630842d8d3e1e58cd77c38da5 *NEWS
+6d454e39f63a487c0234c64f963eb8fc *DESCRIPTION
+2162fe57800db0208b5c23817f02ff73 *NAMESPACE
+ab04c0cf18ec6f81eef235f4fcbe68e0 *NEWS
 df3f5e6d5e454ea63d01e1e2ab03a854 *R/00_constants.R
-b59207045483893c8b3edb8d94766254 *R/reportr.R
+fb845f2df13d42193968a2c4b103b7f8 *R/reportr.R
 7c063d08638a36625b1602c1f3ba0c66 *README.md
-16642162d4aa9953c253b17cdf822ab3 *man/reportr.Rd
+76358acc8391fe9ed6b3e4ca717a671a *man/reportr.Rd
 820368030b234654ea516cf309ad3d06 *tests/testthat.R
-c19d609b3457c20ada4f6c2f1a73d6a8 *tests/testthat/test-05-reportr.R
+247acc0aca2eb0a760004ed1fbb551ab *tests/testthat/test-05-reportr.R
+d7a7149065051e7be9c42e3a9520a1a5 *tests/testthat/test-10-ask.R
+ed69d7d8a6a6d429d9f8fac120973162 *tests/testthat/test-15-assert.R

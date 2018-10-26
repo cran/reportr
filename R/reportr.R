@@ -37,6 +37,10 @@
 #' then forms the text of the question, and \code{ask} returns the text
 #' entered by the user.
 #' 
+#' The \code{assert} function asserts that its first argument evaluates to
+#' \code{TRUE}, and prints an error message if not (or warning, etc., according
+#' to the specified output level for the message).
+#' 
 #' The call \code{report(Error,\dots)} is largely similar to \code{stop(\dots)}
 #' in most cases, except that a stack trace will be printed if the current
 #' output level is \code{Debug}. The "abort" restart is invoked in any case. No
@@ -82,7 +86,12 @@
 #'   Details.
 #' @param default A default return value, to be used when the message is
 #'   filtered out or the output level is above \code{Question}.
+#' @param valid For \code{ask}, a character vector of valid responses. If
+#'   necessary, the question will be asked repeatedly until the user gives a
+#'   suitable response. (Matching is not case-sensitive.)
 #' @param expr An expression to be evaluated.
+#' @param envir For \code{assert}, the environment in which to evaluate the
+#'   specified expression.
 #' 
 #' @return These functions are mainly called for their side effects, but
 #'   \code{getOutputLevel} returns the current output level,
@@ -258,19 +267,33 @@ withReportrHandlers <- function (expr)
         return (NULL)
 }
 
+# Simple wrappers, to facilitate mocking in the tests
+.interactive <- function() base::interactive()
+.readline <- function(...) base::readline(...)
+
 #' @rdname reportr
 #' @export
-ask <- function (..., default = NULL, prefixFormat = NULL)
+ask <- function (..., default = NULL, valid = NULL, prefixFormat = NULL)
 {
     outputLevel <- getOutputLevel()
     message <- .buildMessage(...)
-    if (!interactive() || outputLevel > OL$Question || is.null(message))
+    if (!.interactive() || outputLevel > OL$Question || is.null(message))
         return (default)
     else
     {
         reportFlags()
-        ans <- readline(paste(.buildPrefix(OL$Question,prefixFormat), message, " ", sep=""))
-        return (ans)
+        repeat
+        {
+            ans <- .readline(paste(.buildPrefix(OL$Question,prefixFormat), message, " ", sep=""))
+            if (is.null(valid))
+                return (ans)
+            else
+            {
+                match <- (tolower(ans) == tolower(valid))
+                if (any(match))
+                    return (valid[which(match)[1]])
+            }
+        }
     }
 }
 
@@ -366,4 +389,17 @@ reportFlags <- function ()
 clearFlags <- function ()
 {
     .Workspace$reportrFlags <- NULL
+}
+
+#' @rdname reportr
+#' @export
+assert <- function (expr, ..., level = OL$Error, prefixFormat = NULL, envir = parent.frame())
+{
+    result <- try(as.logical(eval(substitute(expr), envir)), silent=TRUE)
+    if (!isTRUE(result))
+    {
+        level <- .evaluateLevel(level)
+        message <- .buildMessage(...)
+        report(level, message)
+    }
 }
