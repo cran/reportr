@@ -1,0 +1,248 @@
+#' Handling reportr conditions
+#'
+#' These functions evaluate an expression in a context where conditions are
+#' handled by reportr. `reportAs()` changes the level at which particular
+#' classes of condition are reported, which is how a caller decides how serious
+#' a situation is. `withReportrHandlers()` additionally arranges for R's own
+#' messages, warnings and errors to be reported by reportr, and
+#' `reportrHandlers()` does the same for a whole session.
+#'
+#' Conditions to remap are given as named arguments, where the name is the
+#' class of condition to match and the value is the level at which it should be
+#' reported. Levels may be named in any of the usual ways, so `Error`,
+#' `OL$Error` and `"Error"` are equivalent. Mapping a class to `Ignore`
+#' suppresses it entirely.
+#'
+#' ```
+#' # A missing file is an error, as signalled ...
+#' file <- locateFile(path)
+#'
+#' # ... but merely worth noting here
+#' file <- reportAs(locateFile(path), missingFile=Debug)
+#' ```
+#'
+#' Escalating a condition is always safe. Demoting one below `Error` is not,
+#' because code which signalled an error was generally not written to carry on
+#' afterwards. A demotion is therefore honoured only for conditions signalled
+#' by [fallback()], which supplies a value to continue with. Demoting any other
+#' error reports it at the requested level, but it remains fatal.
+#'
+#' A named argument may also be a function, in which case it is used as a
+#' calling handler for that class of condition, exactly as it would be by
+#' [withCallingHandlers()]. Such a handler may invoke the `muffleReport`
+#' restart, or for a condition signalled by [fallback()] the `useValue`
+#' restart; see [reportrCondition()].
+#'
+#' @section Handling R's own conditions:
+#' `withReportrHandlers()` also translates conditions raised by code which
+#' knows nothing of reportr: calls to [message()] are reported at level `Info`,
+#' [warning()] is flagged at level `Warning`, and [stop()] is reported at level
+#' `Error`. The classes of the original condition are carried over to the
+#' reportr condition, and the original is stored in its `original` element, so
+#' a handler further out can still match it by class.
+#'
+#' `reportrHandlers(TRUE)` installs those same translations for the rest of the
+#' session, using `globalCallingHandlers()`, so that code need not be wrapped
+#' at all. Like that function, it may only be called when no handlers are
+#' already established, which in practice means at top level. It requires
+#' R 4.0.0 or later, and gives an error on earlier versions; the rest of the
+#' package works with R 3.5.0 or later.
+#' `reportrHandlers(FALSE)` removes them again.
+#'
+#' @param expr An expression to evaluate.
+#' @param ... Named arguments mapping condition classes to levels, or to
+#'   handler functions. See Details.
+#' @param install Should the session-wide handlers be installed, or removed?
+#'
+#' @return `reportAs()` and `withReportrHandlers()` return the value of `expr`,
+#'   invisibly if it was invisible. `reportrHandlers()` returns `NULL`,
+#'   invisibly.
+#'
+#' @examples
+#' setOutputLevel(OL$Info)
+#'
+#' findThing <- function (name) {
+#'   if (name != "widget")
+#'     return(fallback(NA, "There is no #{name}", class="missingThing"))
+#'   return("the widget")
+#' }
+#'
+#' # Reported as a warning, rather than an error
+#' reportAs(findThing("sprocket"), missingThing=Warning)
+#'
+#' # Suppressed entirely
+#' reportAs(findThing("sprocket"), missingThing=Ignore)
+#'
+#' # Consolidate duplicated warnings from code that doesn't use reportr
+#' withReportrHandlers(sqrt(-5:-1))
+#'
+#' @seealso [report()] and [fallback()] for signalling these conditions, and
+#'   [reportrCondition()] for their structure.
+#' @author Jon Clayden
+#' @name handlers
+NULL
+
+.handlerDepth <- function ()
+{
+    depth <- .Workspace$handlerDepth
+    if (is.null(depth)) 0L else depth
+}
+
+# Build a calling handler which reports a condition at a different level from
+# the one it was signalled at
+.remapHandler <- function (newLevel)
+{
+    force(newLevel)
+
+    function (condition)
+    {
+        oldLevel <- condition$level
+        demoting <- (oldLevel >= OL$Error && newLevel < OL$Error)
+
+        if (demoting && !isTRUE(condition$recoverable))
+        {
+            # The signalling code specified no value to continue with, so it is
+            # not safe to resume it. Explain, and return normally so that the
+            # condition stands as it was signalled: any handler further out
+            # still gets its chance, and the error remains catchable
+            .report(OL$Warning, paste("A fatal \"", class(condition)[1], "\" condition cannot be demoted, as it has no value to continue with", sep=""))
+            return (invisible(NULL))
+        }
+
+        # Reporting at level Ignore means reporting nothing at all. Otherwise
+        # the condition is signalled afresh, keeping its value and whether it
+        # is recoverable, so that a handler further out can remap it again or
+        # supply a different value. Classes which came from the signaller,
+        # rather than from the level or from R itself, are carried over so
+        # that outer handlers still match it
+        value <- condition$default
+        if (newLevel > OL$Ignore)
+        {
+            userClasses <- setdiff(class(condition), c(paste("reportr",names(OL),sep=""), "reportrCondition", "error", "warning", "message", "condition"))
+            value <- .signal(newLevel, conditionMessage(condition), class=userClasses, call=conditionCall(condition), plain=isTRUE(condition$plain), value=value, recoverable=isTRUE(condition$recoverable), data=list(original=condition))
+        }
+
+        # Reaching this point means that nothing further out made the new
+        # condition fatal, so a recoverable one resumes with its value, while
+        # any other is resumed (or not) as it would have been anyway
+        if (isTRUE(condition$recoverable))
+            invokeRestart("useValue", value)
+        else
+            invokeRestart("muffleReport")
+    }
+}
+
+.buildHandlers <- function (expressions, envir)
+{
+    if (length(expressions) == 0)
+        return (list())
+    if (is.null(names(expressions)) || any(names(expressions) == ""))
+        report(OL$Error, "Conditions to be handled must all be named")
+
+    lapply(expressions, function (expression) {
+        if (is.symbol(expression))
+        {
+            name <- as.character(expression)
+            if (name %in% names(OL))
+                return (.remapHandler(OL[[name]]))
+        }
+        value <- eval(expression, envir)
+        if (is.function(value))
+            return (value)
+        else
+            return (.remapHandler(.evaluateLevel(value, NULL)))
+    })
+}
+
+#' @rdname handlers
+#' @export
+reportAs <- function (expr, ...)
+{
+    handlers <- .buildHandlers(as.list(substitute(list(...)))[-1], parent.frame())
+
+    .Workspace$handlerDepth <- .handlerDepth() + 1L
+    on.exit(.Workspace$handlerDepth <- .handlerDepth() - 1L)
+
+    # The call is built rather than being written out, so that the handlers can
+    # be determined at run time. Evaluating "expr" here forces the promise, and
+    # so evaluates the user's expression in their own frame
+    eval(as.call(c(list(quote(withCallingHandlers), quote(expr)), handlers)))
+}
+
+# These handlers translate conditions raised outside reportr. A reportr
+# condition can also match them, since errors (and, depending on the
+# reportrBaseClasses option, warnings and messages) inherit from a base class,
+# but it has already been signalled and will be reported in its own right
+.messageHandler <- function (m)
+{
+    if (inherits(m, "reportrCondition"))
+        return (invisible(NULL))
+    .signal(OL$Info, ore.subst("\n$","",m$message), class=.foreignClasses(m), call=m$call, data=list(original=m))
+    invokeRestart("muffleMessage")
+}
+
+.warningHandler <- function (w)
+{
+    if (inherits(w, "reportrCondition"))
+        return (invisible(NULL))
+    .signal(OL$Warning, w$message, class=.foreignClasses(w), call=w$call, defer=TRUE, data=list(original=w))
+    invokeRestart("muffleWarning")
+}
+
+.errorHandler <- function (e)
+{
+    if (inherits(e, "reportrCondition"))
+        return (invisible(NULL))
+    if (is.null(e$call))
+        message <- e$message
+    else
+        message <- paste(e$message, " (in \"", as.character(e$call)[1], "(", .truncate(paste(as.character(e$call)[-1],collapse=", "),100), ")\")", sep="")
+    .signal(OL$Error, message, class=.foreignClasses(e), call=e$call, data=list(original=e))
+}
+
+#' @rdname handlers
+#' @export
+withReportrHandlers <- function (expr, ...)
+{
+    handlers <- c(.buildHandlers(as.list(substitute(list(...)))[-1], parent.frame()),
+                  list(message=.messageHandler, warning=.warningHandler, error=.errorHandler))
+
+    .Workspace$handlerDepth <- .handlerDepth() + 1L
+    on.exit(.Workspace$handlerDepth <- .handlerDepth() - 1L)
+
+    result <- withVisible(eval(as.call(c(list(quote(withCallingHandlers), quote(expr)), handlers))))
+
+    # Flags are reported before the result is returned, and the result keeps
+    # its visibility, so that wrapping an expression doesn't change what the
+    # console prints
+    reportFlags()
+    if (result$visible)
+        return (result$value)
+    else
+        return (invisible(result$value))
+}
+
+#' @rdname handlers
+#' @export
+reportrHandlers <- function (install = TRUE)
+{
+    if (getRversion() < "4.0.0")
+        stop("reportrHandlers() requires R >= 4.0.0")
+
+    # Looked up by name, since it doesn't exist before R 4.0.0
+    globalCallingHandlers <- get("globalCallingHandlers", envir=baseenv())
+    ours <- list(.messageHandler, .warningHandler, .errorHandler)
+
+    if (isTRUE(install))
+        globalCallingHandlers(message=.messageHandler, warning=.warningHandler, error=.errorHandler)
+    else
+    {
+        current <- globalCallingHandlers()
+        keep <- !sapply(current, function (handler) any(sapply(ours, identical, handler)))
+        globalCallingHandlers(NULL)
+        if (any(keep))
+            do.call(globalCallingHandlers, current[keep])
+    }
+
+    invisible(NULL)
+}

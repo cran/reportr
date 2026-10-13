@@ -1,0 +1,105 @@
+#' Return a fallback value, with a recoverable error
+#'
+#' A function which cannot do what was asked of it can use `fallback()` to
+#' report the problem and return a substitute value instead. By default the
+#' problem is an error, but one which the caller may choose to demote, in which
+#' case the substitute value is returned and execution continues.
+#'
+#' Often only the caller knows how serious a problem is: a missing file may be
+#' fatal in one context and unremarkable in another. One workaround is a
+#' logical argument indicating whether a certain condition should be raised as
+#' an error, but that puts the decision in the wrong place, and has to be
+#' passed down through every intervening layer. Instead, the function can
+#' signal a classed condition, and supply the value it would return if the
+#' caller decides that execution should continue:
+#'
+#' ```
+#' locateFile <- function (path) {
+#'   if (!file.exists(path))
+#'     return(fallback(NULL, "File #{path} does not exist", class="missingFile"))
+#'   ...
+#' }
+#' ```
+#'
+#' Callers who do nothing get an error. Callers for whom a missing file is
+#' expected can say so with `reportAs(locateFile(path), missingFile=Debug)`,
+#' and get `NULL` back. A handler may also supply a different value, using the
+#' `useValue` restart described in [reportrCondition()].
+#'
+#' @section Choosing between `fallback()`, `report()` and `assert()`:
+#' Escalating a condition to `Error` is always safe, because execution simply
+#' stops sooner than it would have. Demoting an error is only safe when the
+#' code which signalled it has said what value to continue with, and so
+#' `fallback()` is the only way to signal an error which can be demoted. A
+#' condition which should merely be reported, whatever its class, is better
+#' signalled with [report()]; and a requirement which must hold, with nothing
+#' sensible to return if it does not, with [assert()].
+#'
+#' The level should suit a caller who does nothing, and `Error` is usually
+#' right when the value returned would mislead code that expected a real
+#' result, since the mistake would otherwise surface later and somewhere else.
+#' Where the problem is visible in the result itself, such as a partial result
+#' containing `NA` values, a lower level with [report()] and an ordinary return
+#' lets strict callers escalate it instead. A lower level may nevertheless be
+#' given here, which allows a handler to substitute a value.
+#'
+#' Like the other signalling functions, `fallback()` signals its condition even
+#' when the current output level means that nothing will be reported.
+#'
+#' @param value The value to return if the condition is not handled, or is
+#'   handled by demoting it. It may be `NULL`, but must be given.
+#' @param ... Objects which can be coerced to mode `character`, and optionally
+#'   arguments to [ore::es()] such as `round`. These are handled exactly as by
+#'   [report()].
+#' @param class A character vector of classes to attach to the condition, or
+#'   `NULL`. A class derived from the level of the message, such as
+#'   `"reportrError"`, is always attached in addition to these.
+#' @param level The level of the message. See [reportr] for the available
+#'   levels and the ways they may be named.
+#' @param call The call to associate with the condition. Defaults to the call
+#'   of the function which is signalling.
+#'
+#' @return The value of `value`, or a value supplied by a handler through the
+#'   `useValue` restart. At level `Error` or above `fallback()` does not return
+#'   unless the condition is handled.
+#'
+#' @examples
+#' setOutputLevel(OL$Info)
+#'
+#' findThing <- function (name) {
+#'   if (name != "widget")
+#'     return(fallback(NA, "There is no #{name}", class="missingThing"))
+#'   return("the widget")
+#' }
+#'
+#' # An error, if the caller does nothing
+#' \dontrun{findThing("sprocket")}
+#'
+#' # Reported as a warning instead, and NA returned
+#' reportAs(findThing("sprocket"), missingThing=Warning)
+#'
+#' # Suppressed entirely
+#' reportAs(findThing("sprocket"), missingThing=Ignore)
+#'
+#' # Suppressed, with a different value supplied through the useValue restart
+#' reportAs(findThing("sprocket"),
+#'          missingThing=function (cond) invokeRestart("useValue", "a sprocket"))
+#'
+#' @seealso [reportAs()] for acting on these conditions, [reportrCondition()]
+#'   for the structure of the condition objects, and [report()] for conditions
+#'   which are only reported.
+#' @author Jon Clayden
+#' @export
+fallback <- function (value, ..., class = NULL, level = OL$Error, call = sys.call(-1))
+{
+    if (missing(value))
+        report(OL$Error, "A value to fall back on must be given")
+
+    level <- .evaluateLevel(level)
+    message <- .buildMessage(..., .envir=parent.frame())
+
+    # Unlike the other signalling functions, the value is the point here, so
+    # it is returned visibly
+    result <- .signal(level, message, class=class, call=call, value=value, recoverable=TRUE)
+    return (result)
+}
